@@ -1,98 +1,70 @@
-FROM ubuntu:18.04 as builder
+FROM  ubuntu:22.04 as builder
 
-ARG VER_TELOMEREHUNTER=1.1.0
-ARG VER_PYPDF2=1.26.0
-ARG VER_PYSAM=0.9.0
-ARG VER_HTSLIB=1.9
-ARG VER_SAMTOOLS=1.9
+USER  root
 
-
-USER root
+# ALL tool versions used by opt-build.sh
+ENV VER_LIBDEFLATE="v1.12"
+ENV VER_KOURAMI="v0.9.6"
+ENV VER_SAMTOOLS="1.14"
+ENV VER_HTSLIB="1.14"
+ENV VER_BAMUTIL="v1.0.15"
+ENV VER_BWA="v0.7.17"
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-ENV OPT /opt/wtsi-cgp
-ENV PATH $OPT/bin:$PATH
-ENV LD_LIBRARY_PATH $OPT/lib
-ENV LC_ALL C
-
 RUN apt-get -yq update
-ENV TZ=Europe/London
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt-get install -yq --no-install-recommends \
-locales \
-build-essential \
-g++ \
-make \
-gcc \
-gfortran \
-curl \
-pkg-config \
-zlib1g-dev \
-libbz2-dev \
-liblzma-dev \
-libcurl4-openssl-dev \
-libssl-dev \
-libxml2-dev \
-libssh2-1-dev \
-libreadline-dev \
-libpcre3 \
-libpcre3-dev \
-libfontconfig1-dev \
-libcairo2-dev \
-wget \
-r-base \
-libncurses5-dev \
-libncursesw5-dev \
-python-pip \
-python-setuptools \
-python-dev
+RUN apt-get install -yq --no-install-recommends locales
+RUN apt-get install -yq --no-install-recommends ca-certificates
+RUN apt-get install -yq --no-install-recommends pkg-config
+RUN apt-get install -yq --no-install-recommends wget
+RUN apt-get install -yq --no-install-recommends locales
+RUN apt-get install -yq --no-install-recommends maven
+RUN apt-get install -yq --no-install-recommends make
+RUN apt-get install -yq --no-install-recommends bzip2
+RUN apt-get install -yq --no-install-recommends gcc
+RUN apt-get install -yq --no-install-recommends g++
+RUN apt-get install -yq --no-install-recommends zlib1g-dev
+RUN apt-get install -yq --no-install-recommends libbz2-dev
+RUN apt-get install -yq --no-install-recommends liblzma-dev
+RUN apt-get install -yq --no-install-recommends libcurl4-openssl-dev
+RUN apt-get install -yq --no-install-recommends libncurses5-dev
+RUN apt-get install -yq --no-install-recommends libssl-dev
 
 RUN locale-gen en_US.UTF-8
 RUN update-locale LANG=en_US.UTF-8
 
 ENV OPT /opt/wtsi-cgp
-RUN mkdir $OPT
+ENV PATH $OPT/bin:$PATH
+ENV R_LIBS $OPT/R-lib
+ENV R_LIBS_USER $R_LIBS
 ENV LD_LIBRARY_PATH $OPT/lib
 ENV LC_ALL en_US.UTF-8
 ENV LANG en_US.UTF-8
-ENV R_LIBS $OPT/R-lib
-ENV R_LIBS_USER $R_LIBS
-ENV PYTHONPATH $OPT/python-lib/lib/python2.7/site-packages
-
-RUN pip install --upgrade pip
-RUN pip install wheel cython
 
 # build tools from other repos
 ADD build/opt-build.sh build/
-ADD build/libInstall.R build/
 RUN bash build/opt-build.sh $OPT
 
 
-FROM ubuntu:18.04
-ENV DEBIAN_FRONTEND=noninteractive
+
+# build the tools in this repo, separate to reduce build time on errors
+COPY . .
+
+FROM ubuntu:22.04
+
 LABEL maintainer="cgphelp@sanger.ac.uk" \
       uk.ac.sanger.cgp="Cancer, Ageing and Somatic Mutation, Wellcome Trust Sanger Institute" \
-      version="3.3.0" \
-      description="telomerehunter docker"
+      version="1.0.0" \
+      description="kourami docker"
 
-RUN apt-get -yq update
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -yq update
 RUN apt-get install -yq --no-install-recommends \
 apt-transport-https \
 locales \
 curl \
 ca-certificates \
-libperlio-gzip-perl \
-bzip2 \
-psmisc \
 time \
-zlib1g \
-liblzma5 \
-libncurses5 \
-p11-kit \
-r-base \
-python \
+default-jre \
 unattended-upgrades && \
 unattended-upgrade -d -v && \
 apt-get remove -yq unattended-upgrades && \
@@ -101,20 +73,16 @@ apt-get autoremove -yq
 RUN locale-gen en_US.UTF-8
 RUN update-locale LANG=en_US.UTF-8
 
-ENV CGP_OPT /opt/wtsi-cgp
-ENV PATH $CGP_OPT/bin:$CGP_OPT/bin:$PATH
-ENV PYTHONPATH $CGP_OPT/lib/python2.7/site-packages
+ENV OPT /opt/wtsi-cgp
+ENV PATH $OPT/bin:$PATH
+ENV R_LIBS $OPT/R-lib
+ENV R_LIBS_USER $R_LIBS
 ENV LD_LIBRARY_PATH $OPT/lib
 ENV LC_ALL en_US.UTF-8
 ENV LANG en_US.UTF-8
-ENV R_LIBS $CGP_OPT/R-lib
-ENV R_LIBS_USER $R_LIBS
 
-#Setup the correct R libs directories
-
-
-RUN mkdir -p $CGP_OPT
-COPY --from=builder $CGP_OPT $CGP_OPT
+RUN mkdir -p $OPT
+COPY --from=builder $OPT $OPT
 
 ## USER CONFIGURATION
 RUN adduser --disabled-password --gecos '' ubuntu && chsh -s /bin/bash && mkdir -p /home/ubuntu
